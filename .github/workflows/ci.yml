@@ -1,0 +1,30 @@
+# On every push and PR: unit tests, then build the sample warehouse and run every dbt model and test.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DBT_PROFILES_DIR: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Unit tests
+        run: pytest -q
+      - name: Generate sample data
+        run: python -m funnel_lab.generate
+      - name: dbt build (models + data tests)
+        run: dbt build
+      - name: Experiment readout
+        run: python -m funnel_lab.experiments
+      - name: Dashboard builds
+        run: python -m funnel_lab.dashboard
