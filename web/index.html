@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subscriber Funnel Lab</title>
+<meta name="description" content="Funnel, retention and A/B test dashboard built from dbt models on GA4-shaped event data.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6;  /* desktop / primary */
+  --s2: #eb6834;  /* mobile */
+  --s3: #1baf7a;  /* tablet */
+  --good: #006300;
+  --seq-0: #cde2fb; --seq-1: #9ec5f4; --seq-2: #6da7ec; --seq-3: #3987e5; --seq-4: #256abf; --seq-5: #184f95; --seq-6: #0d366b;
+  --tip-bg: #0b0b0b; --tip-ink: #f0efec;
+  --cell-ink-strong: #ffffff; --cell-ink-weak: #0b0b0b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --good: #0ca30c;
+    --seq-0: #1d2a3a; --seq-1: #184f95; --seq-2: #1c5cab; --seq-3: #256abf; --seq-4: #3987e5; --seq-5: #6da7ec; --seq-6: #b7d3f6;
+    --tip-bg: #f0efec; --tip-ink: #0b0b0b;
+    --cell-ink-strong: #0b0b0b; --cell-ink-weak: #f0efec;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --good: #0ca30c;
+  --seq-0: #1d2a3a; --seq-1: #184f95; --seq-2: #1c5cab; --seq-3: #256abf; --seq-4: #3987e5; --seq-5: #6da7ec; --seq-6: #b7d3f6;
+  --tip-bg: #f0efec; --tip-ink: #0b0b0b;
+  --cell-ink-strong: #0b0b0b; --cell-ink-weak: #f0efec;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; }
+header h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--ink-2); max-width: 70ch; }
+header a { color: var(--s1); }
+.note { font-size: 13px; color: var(--muted); margin-top: 8px; }
+h2 { font-size: 19px; margin: 40px 0 4px; }
+.lede { color: var(--ink-2); margin: 0 0 16px; max-width: 75ch; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.card + .card { margin-top: 16px; }
+.grid2 > .card + .card { margin-top: 0; }
+.card h3 { font-size: 15px; margin: 0 0 2px; }
+.card .sub { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 24px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.tile .label { font-size: 13px; color: var(--ink-2); }
+.tile .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.tile .hint { font-size: 12px; color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+.controls { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; }
+.controls button {
+  font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--ink-2);
+}
+.controls button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin-bottom: 8px; }
+.legend span::before {
+  content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+  margin-right: 6px; vertical-align: -1px; background: var(--c);
+}
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+svg .ink { fill: var(--ink); }
+svg .ink2 { fill: var(--ink-2); }
+details { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
+details summary { cursor: pointer; }
+table { border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; width: 100%; }
+th, td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; }
+.table-wrap { overflow-x: auto; }
+#tip {
+  position: fixed; pointer-events: none; z-index: 10; display: none;
+  background: var(--tip-bg); color: var(--tip-ink); font-size: 12px; line-height: 1.4;
+  padding: 6px 9px; border-radius: 6px; max-width: 240px;
+}
+.verdict { border-left: 3px solid var(--good); padding: 4px 0 4px 12px; margin: 16px 0 0; color: var(--ink-2); }
+.theme-toggle {
+  float: right; font: inherit; font-size: 13px; background: transparent; color: var(--ink-2);
+  border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; cursor: pointer;
+}
+footer { margin-top: 48px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <button class="theme-toggle" id="theme" type="button">Toggle dark mode</button>
+    <h1>Subscriber Funnel Lab</h1>
+    <p>Where shoppers drop out of the funnel, whether they come back, and whether a paywall change
+      really lifted subscriptions. Every number here comes from dbt models, rebuilt and tested on each push.
+      <a href="https://github.com/jkt6082/subscriber-funnel-lab">Source on GitHub</a>.</p>
+    <p class="note">Funnel data: a generated sample in Google's GA4 export format. Experiment: simulated, with a known true effect. No real users.</p>
+  </header>
+
+  <section class="tiles" id="kpis" aria-label="Headline numbers"></section>
+
+  <h2>Where shoppers drop out</h2>
+  <p class="lede" id="funnel-lede"></p>
+  <div class="card">
+    <div class="controls" id="funnel-filter" role="group" aria-label="Device"></div>
+    <div id="funnel"></div>
+    <details><summary>Show as table</summary><div class="table-wrap" id="funnel-table"></div></details>
+  </div>
+
+  <div class="grid2" style="margin-top:16px">
+    <div class="card">
+      <h3>Daily sessions</h3>
+      <p class="sub">Black Friday (27 Nov) is the spike</p>
+      <div id="daily"></div>
+    </div>
+    <div class="card">
+      <h3>Weekly purchase conversion by device</h3>
+      <p class="sub">Share of sessions ending in a purchase</p>
+      <div class="legend" id="weekly-legend"></div>
+      <div id="weekly"></div>
+    </div>
+  </div>
+
+  <h2>Do people come back?</h2>
+  <p class="lede">Each row is a cohort: everyone whose first visit fell in that week. Each column shows the share of them
+    who visited again N weeks later. Later cohorts have had less time to return, so their rows are shorter.</p>
+  <div class="card">
+    <div id="retention" class="table-wrap"></div>
+    <details><summary>Show as table</summary><div class="table-wrap" id="retention-table"></div></details>
+  </div>
+
+  <h2>A/B test: 3 free articles instead of 5</h2>
+  <p class="lede">Readers in the treatment group hit the paywall after 3 free articles instead of 5. Did more of them subscribe?</p>
+  <section class="tiles" id="exp-tiles" aria-label="Experiment results" style="margin-top:0"></section>
+  <div class="grid2" style="margin-top:16px">
+    <div class="card">
+      <h3>Subscription lift, with 95% confidence interval</h3>
+      <p class="sub">The diamond marks the true effect built into the simulation</p>
+      <div id="lift"></div>
+    </div>
+    <div class="card">
+      <h3>CUPED: same answer, tighter interval</h3>
+      <p class="sub">Change in articles read. CUPED uses each reader's pre-test reading to remove noise</p>
+      <div id="cuped"></div>
+    </div>
+  </div>
+  <p class="verdict" id="verdict"></p>
+
+  <footer>Built with dbt + DuckDB, Python, and hand-written SVG. Generated <span id="built"></span>.</footer>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const DATA = /*__DASHBOARD_DATA__*/null;
+
+// ---------- helpers ----------
+const $ = (id) => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+const fmtPct = (x, d = 1) => (x * 100).toFixed(d) + "%";
+const fmtSignedPct = (x, d = 2) => (x >= 0 ? "+" : "−") + Math.abs(x * 100).toFixed(d) + "%";
+const fmtUsd = (n) => "$" + Math.round(n).toLocaleString("en-US");
+const fmtDate = (s) => new Date(s + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+function el(tag, attrs = {}, parent) {
+  const node = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (parent) parent.appendChild(node);
+  return node;
+}
+function svg(w, h, label) {
+  const s = el("svg", { viewBox: `0 0 ${w} ${h}`, role: "img", "aria-label": label });
+  return s;
+}
+function text(parent, x, y, str, attrs = {}) {
+  const t = el("text", { x, y, ...attrs }, parent);
+  t.textContent = str;
+  return t;
+}
+const tip = $("tip");
+function showTip(evt, html) {
+  tip.innerHTML = html;
+  tip.style.display = "block";
+  const pad = 14, r = tip.getBoundingClientRect();
+  let x = evt.clientX + pad, y = evt.clientY + pad;
+  if (x + r.width > innerWidth - 8) x = evt.clientX - r.width - pad;
+  if (y + r.height > innerHeight - 8) y = evt.clientY - r.height - pad;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+function table(container, headers, rows) {
+  const t = document.createElement("table");
+  t.innerHTML = "<thead><tr>" + headers.map((h) => `<th>${h}</th>`).join("") + "</tr></thead>" +
+    "<tbody>" + rows.map((r) => "<tr>" + r.map((c) => `<td>${c}</td>`).join("") + "</tr>").join("") + "</tbody>";
+  container.replaceChildren(t);
+}
+// Draw charts at their real on-screen width so text stays a readable size
+const widthOf = (container, fallback) => Math.max(280, Math.floor(container.clientWidth || fallback));
+function niceMax(v) {
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+  return 10 * p;
+}
+
+const DEVICE_COLOR = { desktop: "var(--s1)", mobile: "var(--s2)", tablet: "var(--s3)" };
+const DEVICES = ["desktop", "mobile", "tablet"];
+
+// ---------- KPI tiles ----------
+function renderKpis() {
+  const k = DATA.kpis;
+  const tiles = [
+    ["Sessions", fmtInt(k.sessions), `${fmtDate(k.first_date)} – ${fmtDate(k.last_date)}`],
+    ["Users", fmtInt(k.users), `${(k.sessions / k.users).toFixed(2)} sessions each`],
+    ["Purchase conversion", fmtPct(k.conversion_rate, 2), `${fmtInt(k.purchases)} purchasing sessions`],
+    ["Revenue", fmtUsd(k.revenue_usd), `${fmtUsd(k.revenue_usd / k.purchases)} per order`],
+  ];
+  $("kpis").innerHTML = tiles.map(([l, v, h]) =>
+    `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="hint">${h}</div></div>`).join("");
+}
+
+// ---------- Funnel ----------
+const STEPS = [
+  ["visit", "Visited"], ["view_item", "Viewed a product"], ["add_to_cart", "Added to cart"],
+  ["begin_checkout", "Started checkout"], ["purchase", "Purchased"],
+];
+let funnelDevice = "all";
+function funnelTotals(device) {
+  const rows = device === "all" ? DATA.funnel : DATA.funnel.filter((r) => r.device_category === device);
+  const out = {};
+  for (const [key] of STEPS) out[key] = rows.reduce((s, r) => s + r[key], 0);
+  return out;
+}
+function renderFunnel() {
+  const filter = $("funnel-filter");
+  filter.replaceChildren();
+  for (const d of ["all", ...DEVICES]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = d === "all" ? "All devices" : d[0].toUpperCase() + d.slice(1);
+    b.setAttribute("aria-pressed", String(d === funnelDevice));
+    b.onclick = () => { funnelDevice = d; renderFunnel(); };
+    filter.appendChild(b);
+  }
+
+  const t = funnelTotals(funnelDevice);
+  const W = widthOf($("funnel"), 960);
+  const narrow = W < 560;
+  // On phones the step name sits above its bar instead of beside it
+  const rowH = narrow ? 56 : 44, labelW = narrow ? 0 : 150, rightW = narrow ? 112 : 190, H = STEPS.length * rowH;
+  const barMax = W - labelW - rightW;
+  const s = svg(W, H, "Funnel: sessions reaching each step");
+  STEPS.forEach(([key, label], i) => {
+    const y = i * rowH;
+    const barY = narrow ? y + 22 : y + 8;
+    const value = t[key];
+    const w = Math.max(2, (value / t.visit) * barMax);
+    const prev = i === 0 ? null : t[STEPS[i - 1][0]];
+    text(s, 0, narrow ? y + 15 : y + 25, label, { class: "ink2", "font-size": 13 });
+    el("rect", { x: labelW, y: barY, width: barMax, height: 26, rx: 4, fill: "var(--grid)", opacity: 0.45 }, s);
+    el("rect", { x: labelW, y: barY, width: w, height: 26, rx: 4, fill: "var(--s1)" }, s);
+    text(s, labelW + barMax + 10, barY + 12, fmtInt(value), { class: "ink", "font-size": 13, "font-weight": 600 });
+    text(s, labelW + barMax + 10, barY + 26,
+      i === 0 ? "100% of sessions" : `${fmtPct(value / prev)} of previous`, { "font-size": 11 });
+    const hit = el("rect", { x: 0, y, width: W, height: rowH, fill: "transparent" }, s);
+    hit.addEventListener("mousemove", (e) => showTip(e,
+      `<b>${label}</b><br>${fmtInt(value)} sessions<br>${fmtPct(value / t.visit, 2)} of all sessions` +
+      (prev ? `<br>${fmtPct(value / prev)} of “${STEPS[i - 1][1]}”` : "")));
+    hit.addEventListener("mouseleave", hideTip);
+  });
+  $("funnel").replaceChildren(s);
+
+  // biggest proportional drop, for the headline
+  let worst = null;
+  for (let i = 1; i < STEPS.length; i++) {
+    const rate = t[STEPS[i][0]] / t[STEPS[i - 1][0]];
+    if (!worst || rate < worst.rate) worst = { i, rate };
+  }
+  const all = funnelTotals("all");
+  $("funnel-lede").textContent =
+    `Only ${fmtPct(all.purchase / all.visit, 2)} of sessions end in a purchase. The steepest drop is from ` +
+    `“${STEPS[worst.i - 1][1].toLowerCase()}” to “${STEPS[worst.i][1].toLowerCase()}”, where just ` +
+    `${fmtPct(worst.rate)} continue${funnelDevice === "all" ? "" : ` (${funnelDevice})`}.`;
+
+  table($("funnel-table"), ["Step", ...["All", ...DEVICES]],
+    STEPS.map(([key, label]) => [label, ...["all", ...DEVICES].map((d) => fmtInt(funnelTotals(d)[key]))]));
+}
+
+// ---------- Line charts ----------
+function lineChart(container, { series, xs, yMax, yFormat, label, annotate, tipFor }) {
+  const W = widthOf(container, 460), H = 240, m = { t: 12, r: 16, b: 26, l: 44 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const s = svg(W, H, label);
+  const x = (i) => m.l + (i / (xs.length - 1)) * iw;
+  const y = (v) => m.t + ih - (v / yMax) * ih;
+
+  for (let k = 0; k <= 4; k++) {
+    const v = (yMax * k) / 4, yy = y(v);
+    el("line", { x1: m.l, x2: W - m.r, y1: yy, y2: yy, stroke: k === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }, s);
+    text(s, m.l - 6, yy + 4, yFormat(v), { "text-anchor": "end" });
+  }
+  const tickEvery = Math.ceil(xs.length / 5);
+  xs.forEach((d, i) => { if (i % tickEvery === 0) text(s, x(i), H - 6, fmtDate(d), { "text-anchor": "middle" }); });
+
+  if (annotate) {
+    const i = xs.indexOf(annotate.x);
+    if (i >= 0) {
+      el("line", { x1: x(i), x2: x(i), y1: m.t, y2: m.t + ih, stroke: "var(--axis)", "stroke-dasharray": "3 3" }, s);
+      text(s, x(i) + 6, m.t + 10, annotate.label, { class: "ink2" });
+    }
+  }
+  for (const ser of series) {
+    const pts = ser.values.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`)).filter(Boolean);
+    el("polyline", { points: pts.join(" "), fill: "none", stroke: ser.color, "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round" }, s);
+  }
+  // crosshair + tooltip
+  const cross = el("line", { y1: m.t, y2: m.t + ih, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" }, s);
+  const dots = series.map((ser) => el("circle", { r: 4, fill: ser.color, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, s));
+  const hit = el("rect", { x: m.l, y: m.t, width: iw, height: ih, fill: "transparent" }, s);
+  hit.addEventListener("mousemove", (e) => {
+    const pt = s.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const local = pt.matrixTransform(s.getScreenCTM().inverse());
+    const i = Math.max(0, Math.min(xs.length - 1, Math.round(((local.x - m.l) / iw) * (xs.length - 1))));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    series.forEach((ser, k) => {
+      const v = ser.values[i];
+      dots[k].setAttribute("visibility", v == null ? "hidden" : "visible");
+      if (v != null) { dots[k].setAttribute("cx", x(i)); dots[k].setAttribute("cy", y(v)); }
+    });
+    showTip(e, tipFor(i));
+  });
+  hit.addEventListener("mouseleave", () => {
+    hideTip(); cross.setAttribute("visibility", "hidden");
+    dots.forEach((d) => d.setAttribute("visibility", "hidden"));
+  });
+  container.replaceChildren(s);
+}
+
+function renderDaily() {
+  const xs = DATA.daily.map((d) => d.session_date);
+  const vals = DATA.daily.map((d) => d.sessions);
+  lineChart($("daily"), {
+    xs, series: [{ values: vals, color: "var(--s1)" }],
+    yMax: niceMax(Math.max(...vals)), yFormat: (v) => fmtInt(v), label: "Daily sessions",
+    annotate: { x: "2020-11-27", label: "Black Friday" },
+    tipFor: (i) => `<b>${fmtDate(xs[i])}</b><br>${fmtInt(DATA.daily[i].sessions)} sessions<br>${fmtInt(DATA.daily[i].purchases)} with a purchase`,
+  });
+}
+
+function renderWeekly() {
+  const weeks = [...new Set(DATA.weekly_conversion.map((r) => r.week))].sort();
+  const lookup = {};
+  for (const r of DATA.weekly_conversion) lookup[r.week + "|" + r.device_category] = r;
+  const series = DEVICES.map((d) => ({
+    name: d, color: DEVICE_COLOR[d],
+    values: weeks.map((w) => lookup[w + "|" + d]?.conversion_rate ?? null),
+  }));
+  const maxV = Math.max(...series.flatMap((s) => s.values.filter((v) => v != null)));
+  $("weekly-legend").innerHTML = DEVICES.map((d) =>
+    `<span style="--c:${DEVICE_COLOR[d]}">${d[0].toUpperCase() + d.slice(1)}</span>`).join("");
+  lineChart($("weekly"), {
+    xs: weeks, series, yMax: niceMax(maxV), yFormat: (v) => fmtPct(v, 1), label: "Weekly purchase conversion by device",
+    tipFor: (i) => `<b>Week of ${fmtDate(weeks[i])}</b><br>` + DEVICES.map((d) => {
+      const r = lookup[weeks[i] + "|" + d];
+      return r ? `${d}: ${fmtPct(r.conversion_rate, 2)} <span style="opacity:.7">(${fmtInt(r.sessions)} sessions)</span>` : "";
+    }).join("<br>"),
+  });
+}
+
+// ---------- Retention heatmap ----------
+function renderRetention() {
+  const cohorts = [...new Set(DATA.retention.map((r) => r.cohort_week))].sort();
+  const maxWeek = Math.max(...DATA.retention.map((r) => r.weeks_since_first_visit));
+  const cell = {};
+  for (const r of DATA.retention) cell[r.cohort_week + "|" + r.weeks_since_first_visit] = r;
+  const size = {};
+  for (const r of DATA.retention) size[r.cohort_week] = r.cohort_users;
+
+  const avail = widthOf($("retention"), 960);
+  const labelW = 64, sizeW = 56, ch = 26, top = 22;
+  // Cells shrink to fit, down to 30px; below that the heatmap scrolls sideways
+  const cw = Math.max(30, Math.min(56, (avail - labelW - sizeW) / (maxWeek + 1)));
+  const W = labelW + sizeW + cw * (maxWeek + 1), H = top + ch * cohorts.length;
+  const s = svg(W, H, "Weekly retention by cohort");
+  if (W > avail) s.style.width = W + "px";
+  text(s, 0, 14, "Cohort", { "font-size": 11 });
+  text(s, labelW + sizeW - 8, 14, "Users", { "text-anchor": "end" });
+  for (let w = 0; w <= maxWeek; w++) text(s, labelW + sizeW + w * cw + cw / 2, 14, w === 0 ? "Wk 0" : String(w), { "text-anchor": "middle" });
+
+  // Week 0 is always 100%, so the scale is set by weeks 1+
+  const later = DATA.retention.filter((r) => r.weeks_since_first_visit > 0).map((r) => r.retention_rate);
+  const scaleMax = Math.max(...later);
+  const steps = 7;
+  cohorts.forEach((c, ri) => {
+    const y = top + ri * ch;
+    text(s, 0, y + 17, fmtDate(c), { class: "ink2", "font-size": 12 });
+    text(s, labelW + sizeW - 8, y + 17, fmtInt(size[c]), { "text-anchor": "end" });
+    for (let w = 0; w <= maxWeek; w++) {
+      const r = cell[c + "|" + w];
+      const x = labelW + sizeW + w * cw;
+      if (!r) continue;
+      const level = w === 0 ? steps - 1 : Math.min(steps - 1, Math.floor((r.retention_rate / scaleMax) * (steps - 1) + 0.5));
+      const rect = el("rect", { x: x + 1, y: y + 1, width: cw - 2, height: ch - 2, rx: 3, fill: `var(--seq-${level})` }, s);
+      if (w <= 4) {
+        text(s, x + cw / 2, y + 17, fmtPct(r.retention_rate, 0), {
+          "text-anchor": "middle", "font-size": cw < 40 ? 9.5 : 11,
+          style: `fill:${level >= 4 ? "var(--cell-ink-strong)" : "var(--cell-ink-weak)"}`,
+        });
+      }
+      rect.addEventListener("mousemove", (e) => showTip(e,
+        `<b>Cohort ${fmtDate(c)}</b>, week ${w}<br>${fmtInt(r.active_users)} of ${fmtInt(r.cohort_users)} active<br>${fmtPct(r.retention_rate, 1)}`));
+      rect.addEventListener("mouseleave", hideTip);
+    }
+  });
+  $("retention").replaceChildren(s);
+  table($("retention-table"), ["Cohort", "Users", ...Array.from({ length: maxWeek + 1 }, (_, w) => "Wk " + w)],
+    cohorts.map((c) => [fmtDate(c), fmtInt(size[c]),
+      ...Array.from({ length: maxWeek + 1 }, (_, w) => cell[c + "|" + w] ? fmtPct(cell[c + "|" + w].retention_rate, 0) : "")]));
+}
+
+// ---------- Experiment ----------
+function intervalChart(container, rows, { format, label, truth }) {
+  const W = widthOf(container, 460), rowH = 54, m = { l: 92, r: 20, t: 8, b: 26 };
+  const H = m.t + rows.length * rowH + m.b;
+  const lo = Math.min(0, ...rows.map((r) => r.lo), truth ?? 0), hi = Math.max(0, ...rows.map((r) => r.hi), truth ?? 0);
+  const pad = (hi - lo) * 0.15, x0 = lo - pad, x1 = hi + pad;
+  const x = (v) => m.l + ((v - x0) / (x1 - x0)) * (W - m.l - m.r);
+  const s = svg(W, H, label);
+  const axisY = m.t + rows.length * rowH;
+  el("line", { x1: m.l, x2: W - m.r, y1: axisY, y2: axisY, stroke: "var(--axis)" }, s);
+  for (let k = 0; k <= 4; k++) {
+    const v = x0 + ((x1 - x0) * k) / 4;
+    text(s, x(v), axisY + 16, format(v), { "text-anchor": "middle" });
+  }
+  el("line", { x1: x(0), x2: x(0), y1: m.t, y2: axisY, stroke: "var(--muted)", "stroke-dasharray": "3 3" }, s);
+  text(s, x(0) + 4, m.t + 10, "no effect", { "font-size": 10 });
+  rows.forEach((r, i) => {
+    const cy = m.t + i * rowH + rowH / 2;
+    text(s, 0, cy + 4, r.name, { class: "ink2", "font-size": 12 });
+    el("line", { x1: x(r.lo), x2: x(r.hi), y1: cy, y2: cy, stroke: r.color, "stroke-width": 6, "stroke-linecap": "round", opacity: 0.35 }, s);
+    el("circle", { cx: x(r.est), cy, r: 6, fill: r.color, stroke: "var(--surface)", "stroke-width": 2 }, s);
+    text(s, x(r.est), cy - 12, format(r.est), { "text-anchor": "middle", class: "ink", "font-size": 11 });
+    const hit = el("rect", { x: 0, y: cy - rowH / 2, width: W, height: rowH, fill: "transparent" }, s);
+    hit.addEventListener("mousemove", (e) => showTip(e, `<b>${r.name}</b><br>Estimate ${format(r.est)}<br>95% CI ${format(r.lo)} to ${format(r.hi)}`));
+    hit.addEventListener("mouseleave", hideTip);
+  });
+  if (truth != null) {
+    const cy = m.t + rowH / 2;
+    el("path", { d: `M${x(truth)},${cy - 8} l6,8 l-6,8 l-6,-8 z`, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }, s);
+    text(s, x(truth), cy + 22, "true", { "text-anchor": "middle", "font-size": 10, class: "ink2" });
+  }
+  container.replaceChildren(s);
+}
+
+function renderExperiment() {
+  const e = DATA.experiment, c = e.conversion;
+  const significant = c.p_value < 0.05 && c.ci_low > 0;
+  const tiles = [
+    ["Control: 5 free articles", fmtPct(e.control_rate, 2), `${fmtInt(e.control_users)} readers`],
+    ["Treatment: 3 free articles", fmtPct(e.treatment_rate, 2), `${fmtInt(e.treatment_users)} readers`],
+    ["Relative lift", (e.relative_lift >= 0 ? "+" : "") + fmtPct(e.relative_lift, 1), `p = ${c.p_value.toFixed(4)}`],
+    ["Sample ratio check", e.srm_p_value < 0.001 ? "Failed" : "Passed", `p = ${e.srm_p_value.toFixed(2)}, split looks fair`],
+  ];
+  $("exp-tiles").innerHTML = tiles.map(([l, v, h]) =>
+    `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="hint">${h}</div></div>`).join("");
+
+  const pts = (x) => fmtSignedPct(x, 2).replace("%", " pts");
+  intervalChart($("lift"), [
+    { name: "Subscription", est: c.estimate, lo: c.ci_low, hi: c.ci_high, color: "var(--s1)" },
+  ], { format: pts, label: "Absolute change in subscription rate", truth: e.true_absolute_lift });
+
+  const raw = e.articles_raw, cu = e.articles_cuped;
+  const fmtA = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
+  intervalChart($("cuped"), [
+    { name: "Plain t-test", est: raw.estimate, lo: raw.ci_low, hi: raw.ci_high, color: "var(--s2)" },
+    { name: "CUPED", est: cu.estimate, lo: cu.ci_low, hi: cu.ci_high, color: "var(--s1)" },
+  ], { format: fmtA, label: "Change in articles read, plain versus CUPED" });
+
+  $("verdict").innerHTML = (significant
+    ? `<b>Recommendation: ship the 3-article meter.</b> Subscriptions rose ${pts(c.estimate)} (95% CI ${pts(c.ci_low)} to ${pts(c.ci_high)}). `
+    : `<b>Recommendation: don't ship yet.</b> The interval still includes zero. `) +
+    `The cost is reading: treated readers read ${Math.abs(raw.estimate).toFixed(2)} fewer articles on average. ` +
+    `CUPED cut the variance of that estimate by ${fmtPct(e.cuped_variance_reduction, 0)}. ` +
+    `The test needed ${fmtInt(e.users_needed_per_arm)} readers per arm. Checking results daily and stopping at the first p < 0.05 ` +
+    `would have produced a false win ${fmtPct(e.peeking_false_positive_rate, 0)} of the time.`;
+}
+
+// ---------- theme ----------
+(function themeToggle() {
+  const root = document.documentElement;
+  try { const saved = localStorage.getItem("theme"); if (saved) root.dataset.theme = saved; } catch {}
+  $("theme").onclick = () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch {}
+  };
+})();
+
+if (!DATA) {
+  document.querySelector("main").insertAdjacentHTML("beforeend",
+    "<p>No data baked in. Run <code>python -m funnel_lab.dashboard</code> and open <code>site/index.html</code>.</p>");
+} else {
+  const renderCharts = () => { renderFunnel(); renderDaily(); renderWeekly(); renderRetention(); renderExperiment(); };
+  renderKpis(); renderCharts();
+  $("built").textContent = DATA.built_at;
+  let lastWidth = innerWidth, timer;
+  addEventListener("resize", () => {
+    if (innerWidth === lastWidth) return;
+    lastWidth = innerWidth;
+    clearTimeout(timer); timer = setTimeout(renderCharts, 150);
+  });
+}
+</script>
+</body>
+</html>
