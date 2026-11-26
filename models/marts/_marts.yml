@@ -42,3 +42,19 @@ models:
       - name: sessions
         data_tests:
           - not_null
+
+  - name: mart_weekly_retention
+    description: >
+      One row per signup cohort (week of first visit) and week since first visit, with
+      the share of the cohort active that week. Week 0 is always 100%.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            columns: ["cohort_week", "weeks_since_first_visit"]
+    columns:
+      - name: weeks_since_first_visit
+        data_tests:
+          - not_null
+      - name: retention_rate
+        data_tests:
+          - not_null
