@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: ga4
+    description: >
+      GA4 export events. On BigQuery this is Google's public obfuscated sample from the
+      Google Merchandise Store (Nov 2020 - Jan 2021). Locally it is a generated sample
+      with the same nested schema.
+    database: "{{ 'bigquery-public-data' if target.type == 'bigquery' else 'raw' }}"
+    schema: "{{ 'ga4_obfuscated_sample_ecommerce' if target.type == 'bigquery' else 'ga4' }}"
+    tables:
+      - name: events
+        identifier: "{{ 'events_*' if target.type == 'bigquery' else 'events' }}"
+
+  - name: experiments
+    description: Simulated paywall meter experiment (local only).
+    database: raw
+    schema: experiments
+    tables:
+      - name: paywall_meter_users

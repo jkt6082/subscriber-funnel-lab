@@ -1,0 +1,23 @@
+# Run dbt from the repo root with --profiles-dir . (or set DBT_PROFILES_DIR=.)
+subscriber_funnel_lab:
+  target: dev
+  outputs:
+    # Local: DuckDB, reading the sample written by `python -m funnel_lab.generate`
+    dev:
+      type: duckdb
+      path: data/warehouse.duckdb
+      threads: 4
+      attach:
+        - path: data/raw.duckdb
+          alias: raw
+          read_only: true
+
+    # Cloud: the real GA4 public sample in BigQuery. Needs `pip install dbt-bigquery`,
+    # `gcloud auth application-default login`, and GCP_PROJECT set to your project id.
+    bq:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT', 'set-GCP_PROJECT') }}"
+      dataset: funnel_lab
+      location: US
+      threads: 4

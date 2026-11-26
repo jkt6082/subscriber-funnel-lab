@@ -1,0 +1,23 @@
+name: subscriber_funnel_lab
+version: "0.1.0"
+config-version: 2
+profile: subscriber_funnel_lab
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["data_tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  subscriber_funnel_lab:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
+    # The paywall experiment is simulated locally, so it only exists on DuckDB.
+    experiments:
+      +materialized: table
+      +enabled: "{{ target.type == 'duckdb' }}"

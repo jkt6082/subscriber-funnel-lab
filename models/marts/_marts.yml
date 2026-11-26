@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: fct_sessions
+    description: One row per GA4 session, with funnel flags and revenue.
+    columns:
+      - name: session_key
+        description: user_pseudo_id + ga_session_id (GA4 session ids are only unique per user).
+        data_tests:
+          - unique
+          - not_null
+      - name: user_pseudo_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_users')
+                field: user_pseudo_id
+      - name: deepest_funnel_step
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["1_visit", "2_view_item", "3_add_to_cart", "4_begin_checkout", "5_purchase"]
+      - name: revenue_usd
+        data_tests:
+          - not_null
+
+  - name: dim_users
+    description: One row per user, with first-touch attributes and lifetime totals.
+    columns:
+      - name: user_pseudo_id
+        data_tests:
+          - unique
+          - not_null
+
+  - name: mart_daily_funnel
+    description: Daily session funnel by device category. Feeds the dashboard.
+    columns:
+      - name: session_date
+        data_tests:
+          - not_null
+      - name: sessions
+        data_tests:
+          - not_null

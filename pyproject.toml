@@ -1,0 +1,10 @@
+[project]
+name = "funnel-lab"
+version = "0.1.0"
+description = "dbt funnel models on GA4 data, plus A/B test analysis with a known ground truth"
+requires-python = ">=3.10"
+authors = [{ name = "Joel Trousdale" }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
