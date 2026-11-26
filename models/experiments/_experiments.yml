@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: fct_paywall_meter_users
+    description: >
+      Simulated user-level results of a paywall meter test. The true effect is set in
+      funnel_lab/experiments/simulate.py, so the analysis can be checked against it.
+    columns:
+      - name: user_id
+        data_tests:
+          - unique
+          - not_null
+      - name: variant
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["control", "treatment"]
+      - name: subscribed
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
+  - name: mart_paywall_meter_summary
+    description: Per-variant totals for the paywall meter test.
+    columns:
+      - name: variant
+        data_tests:
+          - unique
